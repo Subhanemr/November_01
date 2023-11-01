@@ -198,3 +198,130 @@ DECLARE @NumberOfPlays INT
 SELECT @NumberOfPlays = dbo.GetNumberOfPlaysByUser(@UserId)
 SELECT @NumberOfPlays NumberOfPlays
 
+
+
+--Optional
+
+CREATE DATABASE [Library]
+
+USE [Library]
+
+CREATE TABLE Authors (
+  Id INT PRIMARY KEY IDENTITY,
+  FirstName VARCHAR(50) NOT NULL,
+  LastName VARCHAR(50) DEFAULT 'XXX',
+)
+
+CREATE TABLE Books (
+  Id INT PRIMARY KEY IDENTITY,
+  Title VARCHAR(100) NOT NULL,
+  ISBN VARCHAR(13) DEFAULT '0000000000000',
+  PublicationYear INT NOT NULL CHECK (PublicationYear BETWEEN 0 AND 2023),
+)
+
+CREATE TABLE Borrowers (
+  Id INT PRIMARY KEY IDENTITY,
+  FirstName VARCHAR(50) NOT NULL,
+  LastName VARCHAR(50) DEFAULT 'XXX',
+  Email VARCHAR(100),
+)
+
+CREATE TABLE Checkouts (
+  Id INT PRIMARY KEY IDENTITY,
+  BookId INT,
+  BorrowerId INT,
+  CheckoutDate DATE NOT NULL,
+  ReturnDate DATE,
+  FOREIGN KEY (BookId) REFERENCES Books (Id),
+  FOREIGN KEY (BorrowerId) REFERENCES Borrowers (Id)
+)
+
+CREATE TABLE BooksAuthors (
+  BookId INT,
+  AuthorId INT,
+  FOREIGN KEY (BookId) REFERENCES Books (Id),
+  FOREIGN KEY (AuthorId) REFERENCES Authors (Id)
+)
+
+
+INSERT INTO Authors (FirstName, LastName) VALUES
+    ('Ryan', 'Gosling'),
+    ('Patrick', 'Bateman')
+
+INSERT INTO Books (Title, ISBN, PublicationYear) VALUES
+    ('Drive', '1234567890123', 2020),
+    ('American Psycho', '9876543210987', 2019)
+
+INSERT INTO Borrowers (FirstName, LastName, Email) VALUES
+    ('Mike', 'Tyson', 'mike@example.com'),
+    ('Bob', 'King', 'kingbob@example.com')
+
+INSERT INTO Checkouts (BookId, BorrowerId, CheckoutDate, ReturnDate) VALUES
+    (1, 1, '2023-01-15', NULL),
+    (2, 2, '2023-02-20', '2023-03-15')
+
+INSERT INTO BooksAuthors (BookId, AuthorId) VALUES
+    (1, 1),
+    (2, 2)
+
+CREATE VIEW CheckedOutBooks 
+AS
+SELECT 
+  b.Title Book,
+  CONCAT(a.FirstName, ' ', a.LastName) Author,
+  CONCAT(r.FirstName, ' ', r.LastName) Borrower,
+  c.CheckoutDate,
+  c.ReturnDate
+FROM Checkouts c
+JOIN Books b ON b.Id = c.BookId
+JOIN BooksAuthors ba ON ba.BookId = b.Id
+JOIN Authors a ON a.Id = ba.AuthorId
+JOIN Borrowers r ON r.Id = c.BorrowerId
+WHERE c.ReturnDate IS NULL
+
+SELECT * FROM CheckedOutBooks
+
+CREATE FUNCTION BooksCheckedOutByBorrower (@BorrowerId INT)
+RETURNS INT
+AS
+BEGIN
+    DECLARE @NotReturnedBooks INT;
+
+    SELECT @NotReturnedBooks = COUNT(*)
+    FROM Checkouts
+    WHERE BorrowerId = @BorrowerId AND (ReturnDate IS NULL OR ReturnDate > GETDATE());
+
+    RETURN @NotReturnedBooks
+END;
+
+DECLARE @Result INT;
+SET @Result = dbo.BooksCheckedOutByBorrower(1);
+
+SELECT 'Not returned books of Borrower' ResultDescription, @Result 'Number of books not returned'
+
+
+CREATE PROCEDURE CheckOutBook (
+    @BookId INT,
+    @BorrowerId INT,
+    @CheckoutDate DATE,
+    @ReturnDate DATE
+)
+AS
+BEGIN
+    INSERT INTO Checkouts (BookId, BorrowerId, CheckoutDate, ReturnDate)
+    VALUES (@BookId, @BorrowerId, @CheckoutDate, @ReturnDate);
+
+    DECLARE @NotReturnedBooks INT;
+    SET @NotReturnedBooks = dbo.BooksCheckedOutByBorrower(@BorrowerId);
+
+    SELECT 'Not returned books of Borrower' AS ResultDescription, @NotReturnedBooks AS 'Number of books not returned';
+END
+
+EXEC CheckOutBook @BookId = 1, @BorrowerId = 1, @CheckoutDate = '2023-04-01', @ReturnDate = NULL;
+
+
+
+
+
+
+
